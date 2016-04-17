@@ -16,7 +16,9 @@ This software only requires Python 3
 
 ## Usage
 
-It takes a file of recorded outputs, optionally preceded by inputs (which will be ignored), e.g. for AES:
+It takes a file of recorded outputs, optionally preceded by inputs (which will be ignored).
+First record must be with the correct output, to be used as reference.  
+E.g. for AES:
 
 ```python
 #!/usr/bin/env python3
