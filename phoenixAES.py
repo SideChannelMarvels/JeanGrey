@@ -199,16 +199,53 @@ None, [
 ], None
 ]
 
-def check(output, verbose=1, encrypt=None, _intern={}):
+_MC=   [[2, 3, 1, 1],
+        [1, 2, 3, 1],
+        [1, 1, 2, 3],
+        [3, 1, 1, 2]]
+
+_invMC=[[14, 11, 13, 9],
+        [9,  14, 11, 13],
+        [13, 9, 14, 11],
+        [11, 13, 9, 14]]
+
+def check(output, lastroundkey=None, encrypt=None, verbose=1, _intern={}):
+    if lastroundkey is not None:
+        assert encrypt is not None
+        # AddKey
+        o=[(output>>(i<<3) & 0xff) for i in range(blocksize)][::-1]
+        output^=lastroundkey
+        o=[(output>>(i<<3) & 0xff) for i in range(blocksize)][::-1]
+        if encrypt:
+            # invShiftRow
+            o=[o[0], o[13], o[10], o[7], o[4], o[1], o[14], o[11],
+               o[8], o[5], o[2], o[15], o[12], o[9], o[6], o[3]]
+        else:
+            # ShiftRow
+            o=[o[0], o[5], o[10], o[15], o[4], o[9], o[14], o[3],
+               o[8], o[13], o[2], o[7], o[12], o[1], o[6], o[11]]
+        # invSBox / SBox
+        o=[_AesSBox[not encrypt][x] for x in o]
+        # invMC / MC
+        o2=[0]*16
+        for i in range(4):
+            for j in range(4):
+                o2[(4*i)+j] = _AesMult[[_invMC, _MC][not encrypt][j][0]][o[(4*i)+0]]^\
+                              _AesMult[[_invMC, _MC][not encrypt][j][1]][o[(4*i)+1]]^\
+                              _AesMult[[_invMC, _MC][not encrypt][j][2]][o[(4*i)+2]]^\
+                              _AesMult[[_invMC, _MC][not encrypt][j][3]][o[(4*i)+3]]
+        o=o2
+        output=int(''.join(["%02X" % x for x in o]), 16)
+
     if not _intern:
         _intern['goldenref']=output
         if verbose>2:
             print("FI: record golden ref")
-        return (FaultStatus.NoFault, None)
+        return (FaultStatus.NoFault, None, output)
     if output == _intern['goldenref']:
         if verbose>2:
             print("FI: no impact")
-        return (FaultStatus.NoFault, None)
+        return (FaultStatus.NoFault, None, output)
     diff=output^_intern['goldenref']
     diffmap=[(diff>>(i<<3) & 0xff)!=0 for i in range(blocksize)][::-1]
     diffsum=sum(diffmap)
@@ -216,28 +253,29 @@ def check(output, verbose=1, encrypt=None, _intern={}):
         if encrypt is not False and diffmap in _AesFaultMaps[True]:
             if verbose>2:
                 print("FI: good candidate for encryption!")
-            return (FaultStatus.GoodEncFault, _AesFaultMaps[True].index(diffmap))
+            return (FaultStatus.GoodEncFault, _AesFaultMaps[True].index(diffmap), output)
         elif encrypt is not True and diffmap in _AesFaultMaps[False]:
             if verbose>2:
                 print("FI: good candidate for decryption!")
-            return (FaultStatus.GoodDecFault, _AesFaultMaps[False].index(diffmap))
+            return (FaultStatus.GoodDecFault, _AesFaultMaps[False].index(diffmap), output)
         else:
             if verbose>2:
                 print("FI: wrong candidate  (%2i)" % diffsum)
-            return (FaultStatus.WrongFault, None)
+            return (FaultStatus.WrongFault, None, None)
     elif diffsum<4:
         if verbose>2:
             print("FI: too few impact  (%2i)" % diffsum)
-        return (FaultStatus.MinorFault, None)
+        return (FaultStatus.MinorFault, None, None)
     else:
         if verbose>2:
             print("FI: too much impact (%2i)" % diffsum)
-        return (FaultStatus.MajorFault, None)
+        return (FaultStatus.MajorFault, None, None)
 
-def crack(datafile, encrypt=True, verbose=1):
+def crack(datafile, lastroundkey=None, encrypt=True, outputbeforelastround=False, verbose=1):
     goldenrefbytes=None
     candidates=[[], [], [], []]
     recovered=[False, False, False, False]
+    lastroundkey=None if outputbeforelastround else int(lastroundkey, 16) if type(lastroundkey) is str else lastroundkey
     for line in open(datafile):
         if len(line.split())==1:
             # only output available
@@ -250,9 +288,9 @@ def crack(datafile, encrypt=True, verbose=1):
             i,o=int(i,16), int(o,16)
         else:
             continue
+        foo, index, o=check(o, lastroundkey=lastroundkey, encrypt=encrypt, verbose=verbose)
         if not goldenrefbytes:
             goldenrefbytes=[(o>>(i<<3) & 0xff) for i in range(blocksize)][::-1]
-        foo, index=check(o, encrypt=encrypt, verbose=verbose)
         if verbose>1:
             print("%0*X: group %s" % (2*blocksize, o, repr(index)))
         if index is not None:
@@ -269,7 +307,16 @@ def crack(datafile, encrypt=True, verbose=1):
                 Keys=[k for k, y in zip (range(16), _AesFaultMaps[encrypt][i]) if y]
                 for j in range(4):
                     key[Keys[j]]=list(c[i][0][j])[0]
-            print("Round key "+["0", "10"][encrypt]+" found:")
+            if (lastroundkey is not None or outputbeforelastround) and encrypt:
+                k=[0]*16
+                for i in range(4):
+                    for j in range(4):
+                        k[(4*i)+j] = _AesMult[_MC[j][0]][key[(4*i)+0]]^\
+                                     _AesMult[_MC[j][1]][key[(4*i)+1]]^\
+                                     _AesMult[_MC[j][2]][key[(4*i)+2]]^\
+                                     _AesMult[_MC[j][3]][key[(4*i)+3]]
+                key=k
+            print([["First", "Last"], ["Second", "Before last"]][(lastroundkey is not None or outputbeforelastround)][encrypt]+" Round key found:")
             print(''.join(["%02X" % x for x in key]))
             return True
     return False
