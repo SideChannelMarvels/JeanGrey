@@ -209,7 +209,9 @@ _invMC=[[14, 11, 13, 9],
         [13, 9, 14, 11],
         [11, 13, 9, 14]]
 
-def check(output, lastroundkeys=[], encrypt=None, verbose=1, _intern={}):
+def check(output, lastroundkeys=[], encrypt=None, verbose=1, init=False, _intern={}):
+    if init:
+        _intern.clear()
     if len(lastroundkeys)>0:
         assert encrypt is not None
         if encrypt:
@@ -326,9 +328,11 @@ def crack(datafile, lastroundkeys=[], encrypt=True, outputbeforelastrounds=False
             i,o=int(i,16), int(o,16)
         else:
             continue
-        foo, index, o=check(o, lastroundkeys=lastroundkeys, encrypt=encrypt, verbose=verbose)
         if not goldenrefbytes:
+            foo, index, o=check(o, lastroundkeys=lastroundkeys, encrypt=encrypt, verbose=verbose, init=True)
             goldenrefbytes=[(o>>(i<<3) & 0xff) for i in range(blocksize)][::-1]
+        else:
+            foo, index, o=check(o, lastroundkeys=lastroundkeys, encrypt=encrypt, verbose=verbose)
         if verbose>1:
             print("%0*X: group %s" % (2*blocksize, o, repr(index)))
         if index is not None:
