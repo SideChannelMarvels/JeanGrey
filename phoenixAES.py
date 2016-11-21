@@ -209,32 +209,70 @@ _invMC=[[14, 11, 13, 9],
         [13, 9, 14, 11],
         [11, 13, 9, 14]]
 
-def check(output, lastroundkey=None, encrypt=None, verbose=1, _intern={}):
-    if lastroundkey is not None:
+def check(output, lastroundkeys=[], encrypt=None, verbose=1, _intern={}):
+    if len(lastroundkeys)>0:
         assert encrypt is not None
-        # AddKey
-        o=[(output>>(i<<3) & 0xff) for i in range(blocksize)][::-1]
-        output^=lastroundkey
-        o=[(output>>(i<<3) & 0xff) for i in range(blocksize)][::-1]
         if encrypt:
+            lastroundkey = lastroundkeys[0]
+            # AddKey
+            output^=lastroundkey
+            o=[(output>>(i<<3) & 0xff) for i in range(blocksize)][::-1]
             # invShiftRow
             o=[o[0], o[13], o[10], o[7], o[4], o[1], o[14], o[11],
                o[8], o[5], o[2], o[15], o[12], o[9], o[6], o[3]]
+            # invSBox
+            o=[_AesSBox[0][x] for x in o]
+            for lastroundkey in lastroundkeys[1:]:
+                # AddKey
+                output=int(''.join(["%02X" % x for x in o]), 16)
+                output^=lastroundkey
+                o=[(output>>(i<<3) & 0xff) for i in range(blocksize)][::-1]
+                # invMC
+                o2=[0]*16
+                for i in range(4):
+                    for j in range(4):
+                        o2[(4*i)+j] = _AesMult[_invMC[j][0]][o[(4*i)+0]]^\
+                                      _AesMult[_invMC[j][1]][o[(4*i)+1]]^\
+                                      _AesMult[_invMC[j][2]][o[(4*i)+2]]^\
+                                      _AesMult[_invMC[j][3]][o[(4*i)+3]]
+                o=o2
+                # invShiftRow
+                o=[o[0], o[13], o[10], o[7], o[4], o[1], o[14], o[11],
+                   o[8], o[5], o[2], o[15], o[12], o[9], o[6], o[3]]
+                # invSBox
+                o=[_AesSBox[0][x] for x in o]
+
+            # invMC
+            o2=[0]*16
+            for i in range(4):
+                for j in range(4):
+                    o2[(4*i)+j] = _AesMult[_invMC[j][0]][o[(4*i)+0]]^\
+                                  _AesMult[_invMC[j][1]][o[(4*i)+1]]^\
+                                  _AesMult[_invMC[j][2]][o[(4*i)+2]]^\
+                                  _AesMult[_invMC[j][3]][o[(4*i)+3]]
+            o=o2
         else:
-            # ShiftRow
-            o=[o[0], o[5], o[10], o[15], o[4], o[9], o[14], o[3],
-               o[8], o[13], o[2], o[7], o[12], o[1], o[6], o[11]]
-        # invSBox / SBox
-        o=[_AesSBox[not encrypt][x] for x in o]
-        # invMC / MC
-        o2=[0]*16
-        for i in range(4):
-            for j in range(4):
-                o2[(4*i)+j] = _AesMult[[_invMC, _MC][not encrypt][j][0]][o[(4*i)+0]]^\
-                              _AesMult[[_invMC, _MC][not encrypt][j][1]][o[(4*i)+1]]^\
-                              _AesMult[[_invMC, _MC][not encrypt][j][2]][o[(4*i)+2]]^\
-                              _AesMult[[_invMC, _MC][not encrypt][j][3]][o[(4*i)+3]]
-        o=o2
+            o=[(output>>(i<<3) & 0xff) for i in range(blocksize)][::-1]
+            for lastroundkey in lastroundkeys:
+                # AddKey
+                output=int(''.join(["%02X" % x for x in o]), 16)
+                output^=lastroundkey
+                o=[(output>>(i<<3) & 0xff) for i in range(blocksize)][::-1]
+                # SBox
+                o=[_AesSBox[1][x] for x in o]
+                # ShiftRow
+                o=[o[0], o[5], o[10], o[15], o[4], o[9], o[14], o[3],
+                   o[8], o[13], o[2], o[7], o[12], o[1], o[6], o[11]]
+                # MC
+                o2=[0]*16
+                for i in range(4):
+                    for j in range(4):
+                        o2[(4*i)+j] = _AesMult[_MC[j][0]][o[(4*i)+0]]^\
+                                      _AesMult[_MC[j][1]][o[(4*i)+1]]^\
+                                      _AesMult[_MC[j][2]][o[(4*i)+2]]^\
+                                      _AesMult[_MC[j][3]][o[(4*i)+3]]
+                o=o2
+
         output=int(''.join(["%02X" % x for x in o]), 16)
 
     if not _intern:
@@ -261,21 +299,21 @@ def check(output, lastroundkey=None, encrypt=None, verbose=1, _intern={}):
         else:
             if verbose>2:
                 print("FI: wrong candidate  (%2i)" % diffsum)
-            return (FaultStatus.WrongFault, None, None)
+            return (FaultStatus.WrongFault, None, output)
     elif diffsum<4:
         if verbose>2:
             print("FI: too few impact  (%2i)" % diffsum)
-        return (FaultStatus.MinorFault, None, None)
+        return (FaultStatus.MinorFault, None, output)
     else:
         if verbose>2:
             print("FI: too much impact (%2i)" % diffsum)
-        return (FaultStatus.MajorFault, None, None)
+        return (FaultStatus.MajorFault, None, output)
 
-def crack(datafile, lastroundkey=None, encrypt=True, outputbeforelastround=False, verbose=1):
+def crack(datafile, lastroundkeys=[], encrypt=True, outputbeforelastrounds=False, verbose=1):
     goldenrefbytes=None
     candidates=[[], [], [], []]
     recovered=[False, False, False, False]
-    lastroundkey=None if outputbeforelastround else int(lastroundkey, 16) if type(lastroundkey) is str else lastroundkey
+    lastroundkeys=[] if outputbeforelastrounds else [int(x, 16) if type(x) is str else x for x in lastroundkeys]
     for line in open(datafile):
         if len(line.split())==1:
             # only output available
@@ -288,7 +326,7 @@ def crack(datafile, lastroundkey=None, encrypt=True, outputbeforelastround=False
             i,o=int(i,16), int(o,16)
         else:
             continue
-        foo, index, o=check(o, lastroundkey=lastroundkey, encrypt=encrypt, verbose=verbose)
+        foo, index, o=check(o, lastroundkeys=lastroundkeys, encrypt=encrypt, verbose=verbose)
         if not goldenrefbytes:
             goldenrefbytes=[(o>>(i<<3) & 0xff) for i in range(blocksize)][::-1]
         if verbose>1:
@@ -307,7 +345,7 @@ def crack(datafile, lastroundkey=None, encrypt=True, outputbeforelastround=False
                 Keys=[k for k, y in zip (range(16), _AesFaultMaps[encrypt][i]) if y]
                 for j in range(4):
                     key[Keys[j]]=list(c[i][0][j])[0]
-            if (lastroundkey is not None or outputbeforelastround) and encrypt:
+            if (len(lastroundkeys)>0 or outputbeforelastrounds) and encrypt:
                 k=[0]*16
                 for i in range(4):
                     for j in range(4):
@@ -316,7 +354,22 @@ def crack(datafile, lastroundkey=None, encrypt=True, outputbeforelastround=False
                                      _AesMult[_MC[j][2]][key[(4*i)+2]]^\
                                      _AesMult[_MC[j][3]][key[(4*i)+3]]
                 key=k
-            print([["First", "Last"], ["Second", "Before last"]][(lastroundkey is not None or outputbeforelastround)][encrypt]+" Round key found:")
+            if encrypt:
+                if len(lastroundkeys)==0:
+                    if outputbeforelastrounds:
+                        print("Round key before last known rounds found:")
+                    else:
+                        print("Last round key #N found:")
+                else:
+                    print("Round key #N-%i found:" % (len(lastroundkeys)))
+            else:
+                if len(lastroundkeys)==0:
+                    if outputbeforelastrounds:
+                        print("Round key after first known rounds found:")
+                    else:
+                        print("First round key #0 found:")
+                else:
+                    print("Round key #%i found:" % (len(lastroundkeys)))
             print(''.join(["%02X" % x for x in key]))
             return True
     return False
