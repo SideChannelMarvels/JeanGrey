@@ -209,9 +209,7 @@ _invMC=[[14, 11, 13, 9],
         [13, 9, 14, 11],
         [11, 13, 9, 14]]
 
-def check(output, lastroundkeys=[], encrypt=None, verbose=1, init=False, _intern={}):
-    if init:
-        _intern.clear()
+def rewind(output, lastroundkeys=[], encrypt=None, mimiclastround=True):
     if len(lastroundkeys)>0:
         assert encrypt is not None
         if encrypt:
@@ -244,15 +242,16 @@ def check(output, lastroundkeys=[], encrypt=None, verbose=1, init=False, _intern
                 # invSBox
                 o=[_AesSBox[0][x] for x in o]
 
-            # invMC
-            o2=[0]*16
-            for i in range(4):
-                for j in range(4):
-                    o2[(4*i)+j] = _AesMult[_invMC[j][0]][o[(4*i)+0]]^\
-                                  _AesMult[_invMC[j][1]][o[(4*i)+1]]^\
-                                  _AesMult[_invMC[j][2]][o[(4*i)+2]]^\
-                                  _AesMult[_invMC[j][3]][o[(4*i)+3]]
-            o=o2
+            if mimiclastround:
+                # invMC
+                o2=[0]*16
+                for i in range(4):
+                    for j in range(4):
+                        o2[(4*i)+j] = _AesMult[_invMC[j][0]][o[(4*i)+0]]^\
+                                      _AesMult[_invMC[j][1]][o[(4*i)+1]]^\
+                                      _AesMult[_invMC[j][2]][o[(4*i)+2]]^\
+                                      _AesMult[_invMC[j][3]][o[(4*i)+3]]
+                o=o2
         else:
             o=[(output>>(i<<3) & 0xff) for i in range(blocksize)][::-1]
             for lastroundkey in lastroundkeys:
@@ -276,16 +275,21 @@ def check(output, lastroundkeys=[], encrypt=None, verbose=1, init=False, _intern
                 o=o2
 
         output=int(''.join(["%02X" % x for x in o]), 16)
+    return output
+
+def check(output, encrypt=None, verbose=1, init=False, _intern={}):
+    if init:
+        _intern.clear()
 
     if not _intern:
         _intern['goldenref']=output
         if verbose>2:
             print("FI: record golden ref")
-        return (FaultStatus.NoFault, None, output)
+        return (FaultStatus.NoFault, None)
     if output == _intern['goldenref']:
         if verbose>2:
             print("FI: no impact")
-        return (FaultStatus.NoFault, None, output)
+        return (FaultStatus.NoFault, None)
     diff=output^_intern['goldenref']
     diffmap=[(diff>>(i<<3) & 0xff)!=0 for i in range(blocksize)][::-1]
     diffsum=sum(diffmap)
@@ -293,23 +297,23 @@ def check(output, lastroundkeys=[], encrypt=None, verbose=1, init=False, _intern
         if encrypt is not False and diffmap in _AesFaultMaps[True]:
             if verbose>2:
                 print("FI: good candidate for encryption!")
-            return (FaultStatus.GoodEncFault, _AesFaultMaps[True].index(diffmap), output)
+            return (FaultStatus.GoodEncFault, _AesFaultMaps[True].index(diffmap))
         elif encrypt is not True and diffmap in _AesFaultMaps[False]:
             if verbose>2:
                 print("FI: good candidate for decryption!")
-            return (FaultStatus.GoodDecFault, _AesFaultMaps[False].index(diffmap), output)
+            return (FaultStatus.GoodDecFault, _AesFaultMaps[False].index(diffmap))
         else:
             if verbose>2:
                 print("FI: wrong candidate  (%2i)" % diffsum)
-            return (FaultStatus.WrongFault, None, output)
+            return (FaultStatus.WrongFault, None)
     elif diffsum<4:
         if verbose>2:
             print("FI: too few impact  (%2i)" % diffsum)
-        return (FaultStatus.MinorFault, None, output)
+        return (FaultStatus.MinorFault, None)
     else:
         if verbose>2:
             print("FI: too much impact (%2i)" % diffsum)
-        return (FaultStatus.MajorFault, None, output)
+        return (FaultStatus.MajorFault, None)
 
 def crack(datafile, lastroundkeys=[], encrypt=True, outputbeforelastrounds=False, verbose=1):
     goldenrefbytes=None
@@ -328,11 +332,12 @@ def crack(datafile, lastroundkeys=[], encrypt=True, outputbeforelastrounds=False
             i,o=int(i,16), int(o,16)
         else:
             continue
+        o=rewind(o, lastroundkeys=lastroundkeys, encrypt=encrypt)
         if not goldenrefbytes:
-            foo, index, o=check(o, lastroundkeys=lastroundkeys, encrypt=encrypt, verbose=verbose, init=True)
+            foo, index=check(o, encrypt=encrypt, verbose=verbose, init=True)
             goldenrefbytes=[(o>>(i<<3) & 0xff) for i in range(blocksize)][::-1]
         else:
-            foo, index, o=check(o, lastroundkeys=lastroundkeys, encrypt=encrypt, verbose=verbose)
+            foo, index=check(o, encrypt=encrypt, verbose=verbose)
         if verbose>1:
             print("%0*X: group %s" % (2*blocksize, o, repr(index)))
         if index is not None:
