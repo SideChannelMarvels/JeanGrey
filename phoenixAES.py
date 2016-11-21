@@ -374,9 +374,10 @@ def crack(datafile, lastroundkeys=[], encrypt=True, outputbeforelastrounds=False
                         print("First round key #0 found:")
                 else:
                     print("Round key #%i found:" % (len(lastroundkeys)))
-            print(''.join(["%02X" % x for x in key]))
-            return True
-    return False
+            roundkey = ''.join(["%02X" % x for x in key])
+            print(roundkey)
+            return roundkey
+    return None
 
 def _absorb(index, o, candidates, goldenrefbytes, encrypt, verbose):
     obytes=[(o>>(i<<3) & 0xff) for i in range(blocksize)][::-1]
