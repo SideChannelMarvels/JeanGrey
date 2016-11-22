@@ -209,6 +209,17 @@ _invMC=[[14, 11, 13, 9],
         [13, 9, 14, 11],
         [11, 13, 9, 14]]
 
+def MC(block):
+    o=[(block>>(i<<3) & 0xff) for i in range(blocksize)][::-1]
+    o2=[0]*16
+    for i in range(4):
+        for j in range(4):
+            o2[(4*i)+j] = _AesMult[_MC[j][0]][o[(4*i)+0]]^\
+                          _AesMult[_MC[j][1]][o[(4*i)+1]]^\
+                          _AesMult[_MC[j][2]][o[(4*i)+2]]^\
+                          _AesMult[_MC[j][3]][o[(4*i)+3]]
+    return int(''.join(["%02X" % x for x in o2]), 16)
+
 def rewind(output, lastroundkeys=[], encrypt=None, mimiclastround=True):
     if len(lastroundkeys)>0:
         assert encrypt is not None
