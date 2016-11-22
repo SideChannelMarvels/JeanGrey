@@ -212,6 +212,7 @@ _invMC=[[14, 11, 13, 9],
 def rewind(output, lastroundkeys=[], encrypt=None, mimiclastround=True):
     if len(lastroundkeys)>0:
         assert encrypt is not None
+        lastroundkeys=[int(x, 16) if type(x) is str else x for x in lastroundkeys]
         if encrypt:
             lastroundkey = lastroundkeys[0]
             # AddKey
@@ -319,7 +320,6 @@ def crack(datafile, lastroundkeys=[], encrypt=True, outputbeforelastrounds=False
     goldenrefbytes=None
     candidates=[[], [], [], []]
     recovered=[False, False, False, False]
-    lastroundkeys=[] if outputbeforelastrounds else [int(x, 16) if type(x) is str else x for x in lastroundkeys]
     for line in open(datafile):
         if len(line.split())==1:
             # only output available
