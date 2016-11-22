@@ -332,7 +332,8 @@ def crack(datafile, lastroundkeys=[], encrypt=True, outputbeforelastrounds=False
             i,o=int(i,16), int(o,16)
         else:
             continue
-        o=rewind(o, lastroundkeys=lastroundkeys, encrypt=encrypt)
+        if not outputbeforelastrounds:
+            o=rewind(o, lastroundkeys=lastroundkeys, encrypt=encrypt)
         if not goldenrefbytes:
             foo, index=check(o, encrypt=encrypt, verbose=verbose, init=True)
             goldenrefbytes=[(o>>(i<<3) & 0xff) for i in range(blocksize)][::-1]
