@@ -331,6 +331,7 @@ def crack(datafile, lastroundkeys=[], encrypt=True, outputbeforelastrounds=False
     goldenrefbytes=None
     candidates=[[], [], [], []]
     recovered=[False, False, False, False]
+    key=[None]*16
     for line in open(datafile):
         if len(line.split())==1:
             # only output available
@@ -359,13 +360,14 @@ def crack(datafile, lastroundkeys=[], encrypt=True, outputbeforelastrounds=False
             c = candidates
             if len(c[index])==1 and len(c[index][0][0])==1 and len(c[index][0][1])==1 and len(c[index][0][2])==1 and len(c[index][0][3])==1:
                 recovered[index]=True
+                Keys=[k for k, y in zip (range(16), _AesFaultMaps[encrypt][index]) if y]
+                for j in range(4):
+                        key[Keys[j]]=list(c[index][0][j])[0]
+                if verbose>1:
+                    print("Round key bytes recovered:")
+                    print(key) 
             if False in recovered:
                 continue
-            key=[None]*16
-            for i in range(4):
-                Keys=[k for k, y in zip (range(16), _AesFaultMaps[encrypt][i]) if y]
-                for j in range(4):
-                    key[Keys[j]]=list(c[i][0][j])[0]
             if (len(lastroundkeys)>0 or outputbeforelastrounds) and encrypt:
                 k=[0]*16
                 for i in range(4):
