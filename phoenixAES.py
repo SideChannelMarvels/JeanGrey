@@ -365,7 +365,7 @@ def crack(datafile, lastroundkeys=[], encrypt=True, outputbeforelastrounds=False
                         key[Keys[j]]=list(c[index][0][j])[0]
                 if verbose>1:
                     print("Round key bytes recovered:")
-                    print(''.join(["%02X" % x if type(x)==int else ".." for x in key]))
+                    print(''.join(["%02X" % x if x is not None else ".." for x in key]))
             if False in recovered:
                 continue
             if (len(lastroundkeys)>0 or outputbeforelastrounds) and encrypt:
