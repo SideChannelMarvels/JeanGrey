@@ -456,3 +456,20 @@ def _get_compat(diff, tmult, encrypt, _internal={}):
     _internal[(diff, tmult)]=result
     return result
 
+def convert_r8faults(datafile8, datafile9, encrypt=True):
+    with open(datafile8) as r8file:
+        r8faults = [l.strip() for l in r8file.readlines()]
+    ref = r8faults.pop(0)
+    with open(datafile9, 'w') as r9file:
+        r9file.write(ref+'\n')
+        for f8 in r8faults:
+            if encrypt:
+                r9file.write(ref[2* 0:2* 0]+f8[2* 0:2* 1]+ref[2* 1:2* 7]+f8[2* 7:2* 8]+ref[2* 8:2*10]+f8[2*10:2*11]+ref[2*11:2*13]+f8[2*13:2*14]+ref[2*14:2*16]+'\n')
+                r9file.write(ref[2* 0:2* 1]+f8[2* 1:2* 2]+ref[2* 2:2* 4]+f8[2* 4:2* 5]+ref[2* 5:2*11]+f8[2*11:2*12]+ref[2*12:2*14]+f8[2*14:2*15]+ref[2*15:2*16]+'\n')
+                r9file.write(ref[2* 0:2* 2]+f8[2* 2:2* 3]+ref[2* 3:2* 5]+f8[2* 5:2* 6]+ref[2* 6:2* 8]+f8[2* 8:2* 9]+ref[2* 9:2*15]+f8[2*15:2*16]+ref[2*16:2*16]+'\n')
+                r9file.write(ref[2* 0:2* 3]+f8[2* 3:2* 4]+ref[2* 4:2* 6]+f8[2* 6:2* 7]+ref[2* 7:2* 9]+f8[2* 9:2*10]+ref[2*10:2*12]+f8[2*12:2*13]+ref[2*13:2*16]+'\n')
+            else:
+                r9file.write(ref[2* 0:2* 0]+f8[2* 0:2* 1]+ref[2* 1:2* 5]+f8[2* 5:2* 6]+ref[2* 6:2*10]+f8[2*10:2*11]+ref[2*11:2*15]+f8[2*15:2*16]+ref[2*16:2*16]+'\n')
+                r9file.write(ref[2* 0:2* 1]+f8[2* 1:2* 2]+ref[2* 2:2* 6]+f8[2* 6:2* 7]+ref[2* 7:2*11]+f8[2*11:2*12]+ref[2*12:2*12]+f8[2*12:2*13]+ref[2*13:2*16]+'\n')
+                r9file.write(ref[2* 0:2* 2]+f8[2* 2:2* 3]+ref[2* 3:2* 7]+f8[2* 7:2* 8]+ref[2* 8:2* 8]+f8[2* 8:2* 9]+ref[2* 9:2*13]+f8[2*13:2*14]+ref[2*14:2*16]+'\n')
+                r9file.write(ref[2* 0:2* 3]+f8[2* 3:2* 4]+ref[2* 4:2* 4]+f8[2* 4:2* 5]+ref[2* 5:2* 9]+f8[2* 9:2*10]+ref[2*10:2*14]+f8[2*14:2*15]+ref[2*15:2*16]+'\n')
