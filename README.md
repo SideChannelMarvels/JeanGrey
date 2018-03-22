@@ -3,12 +3,17 @@
 
 JeanGrey is a tool to perform differential fault analysis attacks (DFA).
 
-Currently it contains the following ciphers:
+Currently it contains the following ciphers and fault models:
 
   * phoenixAES:  
     AES 128 encryption or decryption  
+    At least 4*2 faults in round 9 (between the last two MixCols)  
     Ref: https://eprint.iacr.org/2003/010  
     Current implementation discards automatically unexploitable outputs but may fail if more than one fault occur on the same column so be careful to record only outputs from single faulted implementations.
+  * phoenixAES.convert_r8faults:  
+    AES 128 encryption or decryption  
+    2 faults in round 8  
+    It simply converts the ciphertexts as if they were faulted in round 9 so the previous attack can be applied
 
 ## Dependencies
 
@@ -55,6 +60,25 @@ phoenixAES.crack('tracefile')
 ```
 
 ```
-Round key 10 found:
+Last round key #N found:
+D014F9A8C9EE2589E13F0CC8B6630CA6
+```
+
+For two faults in round 8:
+
+```python
+#!/usr/bin/env python3
+import phoenixAES
+
+with open("r8faults", "w") as f:
+    f.write("bf9b06f11df478145b8300fe440b0d06\n")
+    f.write("fdfbf95ce2acb6e15f181aab9ec47967\n")
+    f.write("ba5df02542bb547b0cc2e849060273ee\n")
+phoenixAES.convert_r8faults("r8faults", "r9faults")
+phoenixAES.crack("r9faults")
+```
+
+```
+Last round key #N found:
 D014F9A8C9EE2589E13F0CC8B6630CA6
 ```
