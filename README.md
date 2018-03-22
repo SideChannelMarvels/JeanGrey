@@ -59,6 +59,8 @@ with open('tracefile', 'wb') as t:
 phoenixAES.crack('tracefile')
 ```
 
+After 1.5 s:
+
 ```
 Last round key #N found:
 D014F9A8C9EE2589E13F0CC8B6630CA6
@@ -77,6 +79,8 @@ with open("r8faults", "w") as f:
 phoenixAES.convert_r8faults("r8faults", "r9faults")
 phoenixAES.crack("r9faults")
 ```
+
+After 1.5 s:
 
 ```
 Last round key #N found:
