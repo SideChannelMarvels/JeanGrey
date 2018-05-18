@@ -361,8 +361,9 @@ def crack(datafile, lastroundkeys=[], encrypt=True, outputbeforelastrounds=False
             if len(c[index])==1 and len(c[index][0][0])==1 and len(c[index][0][1])==1 and len(c[index][0][2])==1 and len(c[index][0][3])==1:
                 recovered[index]=True
                 Keys=[k for k, y in zip (range(16), _AesFaultMaps[encrypt][index]) if y]
+                Gold=[g for g, y in zip (goldenrefbytes, _AesFaultMaps[encrypt][index]) if y]
                 for j in range(4):
-                        key[Keys[j]]=list(c[index][0][j])[0]
+                        key[Keys[j]]=list(c[index][0][j])[0] ^ Gold[j]
                 if verbose>1:
                     print("Round key bytes recovered:")
                     print(''.join(["%02X" % x if x is not None else ".." for x in key]))
@@ -401,15 +402,13 @@ def crack(datafile, lastroundkeys=[], encrypt=True, outputbeforelastrounds=False
 def _absorb(index, o, candidates, goldenrefbytes, encrypt, verbose):
     obytes=[(o>>(i<<3) & 0xff) for i in range(blocksize)][::-1]
     Diff=[x^g for x, g, y in zip (obytes, goldenrefbytes, _AesFaultMaps[encrypt][index]) if y]
-    Gold=[  g for    g, y in zip (        goldenrefbytes, _AesFaultMaps[encrypt][index]) if y]
-    Keys=[  k for    k, y in zip (                  range(16), _AesFaultMaps[encrypt][index]) if y]
-    Cands=[]
-    Cands+=_get_cands(Diff, Gold, Keys, [[14, 9,  13, 11], [2, 3, 1, 1]][encrypt], encrypt, verbose)
-    Cands+=_get_cands(Diff, Gold, Keys, [[11, 14, 9,  13], [3, 1, 1, 2]][encrypt], encrypt, verbose)
-    Cands+=_get_cands(Diff, Gold, Keys, [[13, 11, 14, 9] , [1, 1, 2, 3]][encrypt], encrypt, verbose)
-    Cands+=_get_cands(Diff, Gold, Keys, [[9,  13, 11, 14], [1, 2, 3, 1]][encrypt], encrypt, verbose)
+    Keys=[  k for    k, y in zip (             range(16), _AesFaultMaps[encrypt][index]) if y]
+    Cands  = _get_cands(Diff, Keys, [[14, 9,  13, 11], [2, 3, 1, 1]][encrypt], encrypt, verbose)
+    Cands += _get_cands(Diff, Keys, [[11, 14, 9,  13], [3, 1, 1, 2]][encrypt], encrypt, verbose)
+    Cands += _get_cands(Diff, Keys, [[13, 11, 14, 9] , [1, 1, 2, 3]][encrypt], encrypt, verbose)
+    Cands += _get_cands(Diff, Keys, [[9,  13, 11, 14], [1, 2, 3, 1]][encrypt], encrypt, verbose)
     if not candidates[index]:
-        candidates[index]=Cands
+        candidates[index] = Cands
     else:
         # merge self.candidates[index] and Cands
         new_candidates=[]
@@ -419,42 +418,22 @@ def _absorb(index, o, candidates, goldenrefbytes, encrypt, verbose):
                     new_candidates.append(((lc0 & loc0), (lc1 & loc1), (lc2 & loc2), (lc3 & loc3)))
         candidates[index]=new_candidates
 
-def _get_cands(Diff, Gold, Keys, tmult, encrypt, verbose):
-    cand0=_get_compat(Diff[0], tmult[0], encrypt)
-    z=[x[0] for x in cand0]
-    cand1=_get_compat(Diff[1], tmult[1], encrypt)
-    cand1=[x for x in cand1 if x[0] in z]
-    z=[x[0] for x in cand1]
-    cand2=_get_compat(Diff[2], tmult[2], encrypt)
-    cand2=[x for x in cand2 if x[0] in z]
-    z=[x[0] for x in cand2]
-    cand3=_get_compat(Diff[3], tmult[3], encrypt)
-    cand3=[x for x in cand3 if x[0] in z]
-    z=[x[0] for x in cand3]
-    cand0=[x for x in cand0 if x[0] in z]
-    cand1=[x for x in cand1 if x[0] in z]
-    cand2=[x for x in cand2 if x[0] in z]
-    cands=[]
-    for zz in set(z):
-        kc0=set([_AesSBox[encrypt][x[1]]^Gold[0] for x in cand0 if x[0]==zz])
-        kc1=set([_AesSBox[encrypt][x[1]]^Gold[1] for x in cand1 if x[0]==zz])
-        kc2=set([_AesSBox[encrypt][x[1]]^Gold[2] for x in cand2 if x[0]==zz])
-        kc3=set([_AesSBox[encrypt][x[1]]^Gold[3] for x in cand3 if x[0]==zz])
-        if verbose > 2:
+def _get_cands(Diff, Keys, tmult, encrypt, verbose):
+    candi = [_get_compat(di, ti, encrypt) for di,ti in zip(Diff, tmult)]
+    z = set(candi[0]).intersection(*candi[1:])
+    candi = [[t for t in enumerate(ci) if t[1] in z] for ci in candi]
+    cands = [[set([j for j,x in ci if x==zi]) for ci in candi] for zi in z]
+    if verbose > 2:
+        for kc0,kc1,kc2,kc3 in cands:
             print ("K%x:" % Keys[0], ["%02X" % x for x in kc0], "K%x:" % Keys[1], ["%02X" % x for x in kc1],"K%x:" % Keys[2], ["%02X" % x for x in kc2],"K%x:" % Keys[3], ["%02X" % x for x in kc3])
-        cands.append((kc0,kc1,kc2,kc3))
     return cands
 
-def _get_compat(diff, tmult, encrypt, _internal={}):
-    if (diff, tmult) in _internal:
-        return _internal[(diff, tmult)]
-    result=[]
-    for i in range(256):
-        for j in range(256):
-            if _AesSBox[encrypt][j]^_AesSBox[encrypt][j^_AesMult[tmult][i]]==diff:
-                result.append((i, j))
-    _internal[(diff, tmult)]=result
-    return result
+def _get_compat(diff, tmult, encrypt):
+    ibox = _AesSBox[1-encrypt]
+    itab = [0]*256
+    for i,mi in enumerate(_AesMult[tmult]):
+        itab[mi] = i
+    return [itab[ibox[j^diff]^ibox_j] for j,ibox_j in enumerate(ibox)]
 
 def convert_r8faults(datafile8, datafile9, encrypt=True):
     with open(datafile8) as r8file:
