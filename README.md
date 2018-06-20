@@ -12,7 +12,7 @@ Currently it contains the following ciphers and fault models:
     Current implementation discards automatically unexploitable outputs but may fail if more than one fault occur on the same column so be careful to record only outputs from single faulted implementations.
   * phoenixAES.convert_r8faults:  
     AES 128 encryption or decryption  
-    2 faults in round 8  
+    2 single faults in round 8
     It simply converts the ciphertexts as if they were faulted in round 9 so the previous attack can be applied
 
 ## Dependencies
@@ -59,14 +59,14 @@ with open('tracefile', 'wb') as t:
 phoenixAES.crack('tracefile')
 ```
 
-After 1.5 s:
+After ~50 ms:
 
 ```
 Last round key #N found:
 D014F9A8C9EE2589E13F0CC8B6630CA6
 ```
 
-For two faults in round 8:
+For two single faults in round 8:
 
 ```python
 #!/usr/bin/env python3
@@ -80,7 +80,7 @@ phoenixAES.convert_r8faults("r8faults", "r9faults")
 phoenixAES.crack("r9faults")
 ```
 
-After 1.5 s:
+After ~50 ms:
 
 ```
 Last round key #N found:
