@@ -1,6 +1,6 @@
 #########################################################################
 # phoenixAES is a Python 3 library to apply                             #
-# a Differential Fault Analysis attack on faulty traces                 #
+# a Differential Fault Analysis attack on faulty outputs                #
 #                                                                       #
 # Copyright (C) 2016                                                    #
 # Original author:   Phil Teuwen <phil@teuwen.org>                      #
@@ -22,8 +22,17 @@
 
 from enum import Enum
 
+# Internally we're using lists of uint8_t ints
+# Here are a few helpers to convert other representations
+
 blocksize=16
 FaultStatus = Enum('FaultStatus', 'Crash Loop NoFault MinorFault MajorFault WrongFault GoodEncFault GoodDecFault')
+
+def int2bytes(state):
+    return (state).to_bytes(blocksize, byteorder='big', signed=False)
+
+def bytes2int(state):
+    return int.from_bytes(state, byteorder='big', signed=False)
 
 _AesFaultMaps= [
 # AES decryption
@@ -38,8 +47,7 @@ _AesFaultMaps= [
   [False, False, False, True, False, False, True, False, False, True, False, False, True, False, False, False]]
 ]
 
-_AesSBox = [[
-# SBoxInv
+_AesInvSBox = [
 0x52, 0x09, 0x6A, 0xD5, 0x30, 0x36, 0xA5, 0x38, 0xBF, 0x40, 0xA3, 0x9E, 0x81, 0xF3, 0xD7, 0xFB,
 0x7C, 0xE3, 0x39, 0x82, 0x9B, 0x2F, 0xFF, 0x87, 0x34, 0x8E, 0x43, 0x44, 0xC4, 0xDE, 0xE9, 0xCB,
 0x54, 0x7B, 0x94, 0x32, 0xA6, 0xC2, 0x23, 0x3D, 0xEE, 0x4C, 0x95, 0x0B, 0x42, 0xFA, 0xC3, 0x4E,
@@ -56,8 +64,9 @@ _AesSBox = [[
 0x60, 0x51, 0x7F, 0xA9, 0x19, 0xB5, 0x4A, 0x0D, 0x2D, 0xE5, 0x7A, 0x9F, 0x93, 0xC9, 0x9C, 0xEF,
 0xA0, 0xE0, 0x3B, 0x4D, 0xAE, 0x2A, 0xF5, 0xB0, 0xC8, 0xEB, 0xBB, 0x3C, 0x83, 0x53, 0x99, 0x61,
 0x17, 0x2B, 0x04, 0x7E, 0xBA, 0x77, 0xD6, 0x26, 0xE1, 0x69, 0x14, 0x63, 0x55, 0x21, 0x0C, 0x7D
-],[
-# SBox
+]
+
+_AesSBox = [
 0x63, 0x7C, 0x77, 0x7B, 0xF2, 0x6B, 0x6F, 0xC5, 0x30, 0x01, 0x67, 0x2B, 0xFE, 0xD7, 0xAB, 0x76,
 0xCA, 0x82, 0xC9, 0x7D, 0xFA, 0x59, 0x47, 0xF0, 0xAD, 0xD4, 0xA2, 0xAF, 0x9C, 0xA4, 0x72, 0xC0,
 0xB7, 0xFD, 0x93, 0x26, 0x36, 0x3F, 0xF7, 0xCC, 0x34, 0xA5, 0xE5, 0xF1, 0x71, 0xD8, 0x31, 0x15,
@@ -74,7 +83,7 @@ _AesSBox = [[
 0x70, 0x3E, 0xB5, 0x66, 0x48, 0x03, 0xF6, 0x0E, 0x61, 0x35, 0x57, 0xB9, 0x86, 0xC1, 0x1D, 0x9E,
 0xE1, 0xF8, 0x98, 0x11, 0x69, 0xD9, 0x8E, 0x94, 0x9B, 0x1E, 0x87, 0xE9, 0xCE, 0x55, 0x28, 0xDF,
 0x8C, 0xA1, 0x89, 0x0D, 0xBF, 0xE6, 0x42, 0x68, 0x41, 0x99, 0x2D, 0x0F, 0xB0, 0x54, 0xBB, 0x16
-]]
+]
 
 _AesMult = [
 None, [
@@ -199,97 +208,155 @@ None, [
 ], None
 ]
 
-_MC=   [[2, 3, 1, 1],
-        [1, 2, 3, 1],
-        [1, 1, 2, 3],
-        [3, 1, 1, 2]]
+def MC(state):
+    """
+    Applies AES MixColumns on AES state
 
-_invMC=[[14, 11, 13, 9],
-        [9,  14, 11, 13],
-        [13, 9, 14, 11],
-        [11, 13, 9, 14]]
-
-def MC(block):
-    o=[(block>>(i<<3) & 0xff) for i in range(blocksize)][::-1]
-    o2=[0]*16
+    :param state: AES state, as 16-byte bytearray
+    :returns: new AES state
+    """
+    state2=bytearray(16)
+    _MC=   [[2, 3, 1, 1],
+            [1, 2, 3, 1],
+            [1, 1, 2, 3],
+            [3, 1, 1, 2]]
     for i in range(4):
         for j in range(4):
-            o2[(4*i)+j] = _AesMult[_MC[j][0]][o[(4*i)+0]]^\
-                          _AesMult[_MC[j][1]][o[(4*i)+1]]^\
-                          _AesMult[_MC[j][2]][o[(4*i)+2]]^\
-                          _AesMult[_MC[j][3]][o[(4*i)+3]]
-    return int(''.join(["%02X" % x for x in o2]), 16)
+            state2[(4*i)+j] = _AesMult[_MC[j][0]][state[(4*i)+0]]^\
+                              _AesMult[_MC[j][1]][state[(4*i)+1]]^\
+                              _AesMult[_MC[j][2]][state[(4*i)+2]]^\
+                              _AesMult[_MC[j][3]][state[(4*i)+3]]
+    return state2
 
-def rewind(output, lastroundkeys=[], encrypt=None, mimiclastround=True):
+def InvMC(state):
+    """
+    Applies AES invMixColumns on AES state
+
+    :param state: AES state, as 16-byte bytearray
+    :returns: new AES state
+    """
+    state2=bytearray(16)
+    _invMC=[[14, 11, 13, 9],
+            [9,  14, 11, 13],
+            [13, 9, 14, 11],
+            [11, 13, 9, 14]]
+    for i in range(4):
+        for j in range(4):
+            state2[(4*i)+j] = _AesMult[_invMC[j][0]][state[(4*i)+0]]^\
+                              _AesMult[_invMC[j][1]][state[(4*i)+1]]^\
+                              _AesMult[_invMC[j][2]][state[(4*i)+2]]^\
+                              _AesMult[_invMC[j][3]][state[(4*i)+3]]
+    return state2
+
+def InvSBox(state):
+    """
+    Applies AES invSBox on AES state
+
+    :param state: AES state, as 16-byte bytearray
+    :returns: new AES state
+    """
+    return bytearray([_AesInvSBox[x] for x in state])
+
+def SBox(state):
+    """
+    Applies AES SBox on AES state
+
+    :param state: AES state, as 16-byte bytearray
+    :returns: new AES state
+    """
+    return bytearray([_AesSBox[x] for x in state])
+
+def InvShiftRow(state):
+    """
+    Applies AES invShiftRow on AES state
+
+    :param state: AES state, as 16-byte bytearray
+    :returns: new AES state
+    """
+    return bytearray([state[0],  state[13], state[10], state[7],
+                      state[4],  state[1],  state[14], state[11],
+                      state[8],  state[5],  state[2],  state[15],
+                      state[12], state[9],  state[6],  state[3]])
+
+def ShiftRow(state):
+    """
+    Applies AES ShiftRow on AES state
+
+    :param state: AES state, as 16-byte bytearray
+    :returns: new AES state
+    """
+    return bytearray([state[0],  state[5],  state[10], state[15],
+                      state[4],  state[9],  state[14], state[3],
+                      state[8],  state[13], state[2],  state[7],
+                      state[12], state[1],  state[6],  state[11]])
+
+def xor(b1, b2):
+    """
+    XOR two bytearrays
+
+    :param b1: first bytearray
+    :param b2: second bytearray
+    :returns: new bytearray
+    """
+    result = bytearray()
+    for b1, b2 in zip(b1, b2):
+        result.append(b1 ^ b2)
+    return result
+
+def AddKey(state, key):
+    """
+    Applies AES AddKey on AES state
+
+    :param state: AES state, as 16-byte bytearray
+    :param key: AES round key to mix, as 16-byte bytearray
+    :returns: new AES state
+    """
+    return xor(state, key)
+
+def rewind(state, lastroundkeys=[], encrypt=None, mimiclastround=True):
+    """
+    Rewinds an AES round on AES state
+
+    :param state: AES state, as 16-byte bytearray
+    :param lastroundkeys: a list of round keys for the rounds to rewind, as 16-byte bytearray
+    :param encrypt: True if encryption, False if decryption. Required if rounds to rewind
+    :param mimiclastround: if True, rewind an extra MC on AES enc, so it looks like last round
+    :returns: new AES state
+    """
     if len(lastroundkeys)>0:
         assert encrypt is not None
-        lastroundkeys=[int(x, 16) if type(x) is str else x for x in lastroundkeys]
         if encrypt:
             lastroundkey = lastroundkeys[0]
-            # AddKey
-            output^=lastroundkey
-            o=[(output>>(i<<3) & 0xff) for i in range(blocksize)][::-1]
-            # invShiftRow
-            o=[o[0], o[13], o[10], o[7], o[4], o[1], o[14], o[11],
-               o[8], o[5], o[2], o[15], o[12], o[9], o[6], o[3]]
-            # invSBox
-            o=[_AesSBox[0][x] for x in o]
+            state=AddKey(state, lastroundkey)
+            state=InvShiftRow(state)
+            state=InvSBox(state)
             for lastroundkey in lastroundkeys[1:]:
-                # AddKey
-                output=int(''.join(["%02X" % x for x in o]), 16)
-                output^=lastroundkey
-                o=[(output>>(i<<3) & 0xff) for i in range(blocksize)][::-1]
-                # invMC
-                o2=[0]*16
-                for i in range(4):
-                    for j in range(4):
-                        o2[(4*i)+j] = _AesMult[_invMC[j][0]][o[(4*i)+0]]^\
-                                      _AesMult[_invMC[j][1]][o[(4*i)+1]]^\
-                                      _AesMult[_invMC[j][2]][o[(4*i)+2]]^\
-                                      _AesMult[_invMC[j][3]][o[(4*i)+3]]
-                o=o2
-                # invShiftRow
-                o=[o[0], o[13], o[10], o[7], o[4], o[1], o[14], o[11],
-                   o[8], o[5], o[2], o[15], o[12], o[9], o[6], o[3]]
-                # invSBox
-                o=[_AesSBox[0][x] for x in o]
+                state=AddKey(state, lastroundkey)
+                state=InvMC(state)
+                state=InvShiftRow(state)
+                state=InvSBox(state)
 
             if mimiclastround:
-                # invMC
-                o2=[0]*16
-                for i in range(4):
-                    for j in range(4):
-                        o2[(4*i)+j] = _AesMult[_invMC[j][0]][o[(4*i)+0]]^\
-                                      _AesMult[_invMC[j][1]][o[(4*i)+1]]^\
-                                      _AesMult[_invMC[j][2]][o[(4*i)+2]]^\
-                                      _AesMult[_invMC[j][3]][o[(4*i)+3]]
-                o=o2
+                state=InvMC(state)
         else:
-            o=[(output>>(i<<3) & 0xff) for i in range(blocksize)][::-1]
             for lastroundkey in lastroundkeys:
-                # AddKey
-                output=int(''.join(["%02X" % x for x in o]), 16)
-                output^=lastroundkey
-                o=[(output>>(i<<3) & 0xff) for i in range(blocksize)][::-1]
-                # SBox
-                o=[_AesSBox[1][x] for x in o]
-                # ShiftRow
-                o=[o[0], o[5], o[10], o[15], o[4], o[9], o[14], o[3],
-                   o[8], o[13], o[2], o[7], o[12], o[1], o[6], o[11]]
-                # MC
-                o2=[0]*16
-                for i in range(4):
-                    for j in range(4):
-                        o2[(4*i)+j] = _AesMult[_MC[j][0]][o[(4*i)+0]]^\
-                                      _AesMult[_MC[j][1]][o[(4*i)+1]]^\
-                                      _AesMult[_MC[j][2]][o[(4*i)+2]]^\
-                                      _AesMult[_MC[j][3]][o[(4*i)+3]]
-                o=o2
-
-        output=int(''.join(["%02X" % x for x in o]), 16)
-    return output
+                state=AddKey(state, lastroundkey)
+                state=SBox(state)
+                state=ShiftRow(state)
+                state=MC(state)
+    return state
 
 def check(output, encrypt=None, verbose=1, init=False, _intern={}):
+    """
+    Checks an output against a reference.
+
+    The first call to the function sets the internal reference as the given output
+    :param output: potentially faulty output
+    :param encrypt: True if encryption, False if decryption
+    :param verbose: verbosity level, prints only if verbose>2
+    :param init: if True, resets the internal reference as the given output
+    :returns: a FaultStatus
+    """
     if init:
         _intern.clear()
 
@@ -302,8 +369,8 @@ def check(output, encrypt=None, verbose=1, init=False, _intern={}):
         if verbose>2:
             print("FI: no impact")
         return (FaultStatus.NoFault, None)
-    diff=output^_intern['goldenref']
-    diffmap=[(diff>>(i<<3) & 0xff)!=0 for i in range(blocksize)][::-1]
+    diff=xor(output,_intern['goldenref'])
+    diffmap=[x!=0 for x in diff]
     diffsum=sum(diffmap)
     if diffsum==4:
         if encrypt is not False and diffmap in _AesFaultMaps[True]:
@@ -327,41 +394,71 @@ def check(output, encrypt=None, verbose=1, init=False, _intern={}):
             print("FI: too much impact (%2i)" % diffsum)
         return (FaultStatus.MajorFault, None)
 
-def crack(datafile, lastroundkeys=[], encrypt=True, outputbeforelastrounds=False, verbose=1):
-    goldenrefbytes=None
+def crack_file(r9_filename, lastroundkeys=[], encrypt=True, outputbeforelastrounds=False, verbose=1):
+    """
+    Tries to crack a round key given faulty outputs glitched on round 9 and stored in a file
+
+    :param r9_filename: the filename of a file containing the output reference on the first line and glitched outputs on next lines, as hex strings
+    :param lastroundkeys: a list of round keys for the rounds to rewind, as 16-byte bytearray
+    :param encrypt: True if encryption, False if decryption.
+    :param outputbeforelastrounds:
+    :param verbose: verbosity level
+    :returns: cracked round key as hexstring or None
+    """
+    ref=None
+    r9faults=[]
+    for line in open(r9_filename):
+        if len(line.split())==1:
+            # only output available
+            o=bytearray.fromhex(line.strip())
+            assert len(o)==blocksize
+            if ref is None:
+                ref=o
+            else:
+                r9faults.append(o)
+        elif len(line.split())==2:
+            i,o=line.split()
+            i,o=bytearray.fromhex(i), bytearray.fromhex(o)
+            assert len(i)==len(o)==blocksize
+            if ref is None:
+                ref=o
+            else:
+                r9faults.append(o)
+        else:
+            continue
+    return crack_bytes(r9faults, ref, lastroundkeys=lastroundkeys, encrypt=encrypt, outputbeforelastrounds=outputbeforelastrounds, verbose=verbose)
+
+def crack_bytes(r9faults, ref, lastroundkeys=[], encrypt=True, outputbeforelastrounds=False, verbose=1):
+    """
+    Tries to crack a round key given faulty outputs glitched on round 9
+
+    :param r9faults: list of glitched outputs, as bytes
+    :param ref: reference output, as bytes
+    :param lastroundkeys: a list of round keys for the rounds to rewind, as 16-byte bytearray
+    :param encrypt: True if encryption, False if decryption.
+    :param outputbeforelastrounds:
+    :param verbose: verbosity level
+    :returns: cracked round key as hexstring or None
+    """
     candidates=[[], [], [], []]
     recovered=[False, False, False, False]
     key=[None]*16
-    for line in open(datafile):
-        if len(line.split())==1:
-            # only output available
-            o=line.strip()
-            assert len(o)==2*blocksize
-            o=int(o,16)
-        elif len(line.split())==2:
-            i,o=line.split()
-            assert len(i)==len(o)==2*blocksize
-            i,o=int(i,16), int(o,16)
-        else:
-            continue
+    _, index=check(ref, encrypt=encrypt, verbose=verbose, init=True)
+    for o in r9faults:
         if not outputbeforelastrounds:
             o=rewind(o, lastroundkeys=lastroundkeys, encrypt=encrypt)
-        if not goldenrefbytes:
-            foo, index=check(o, encrypt=encrypt, verbose=verbose, init=True)
-            goldenrefbytes=[(o>>(i<<3) & 0xff) for i in range(blocksize)][::-1]
-        else:
-            foo, index=check(o, encrypt=encrypt, verbose=verbose)
+        _, index=check(o, encrypt=encrypt, verbose=verbose)
         if verbose>1:
-            print("%0*X: group %s" % (2*blocksize, o, repr(index)))
+            print("{}: group {}".format(o.hex(), index))
         if index is not None:
             if recovered[index]:
                 continue
-            _absorb(index, o, candidates, goldenrefbytes, encrypt, verbose)
+            _absorb(index, o, candidates, ref, encrypt, verbose)
             c = candidates
             if len(c[index])==1 and len(c[index][0][0])==1 and len(c[index][0][1])==1 and len(c[index][0][2])==1 and len(c[index][0][3])==1:
                 recovered[index]=True
                 Keys=[k for k, y in zip (range(16), _AesFaultMaps[encrypt][index]) if y]
-                Gold=[g for g, y in zip (goldenrefbytes, _AesFaultMaps[encrypt][index]) if y]
+                Gold=[g for g, y in zip (ref, _AesFaultMaps[encrypt][index]) if y]
                 for j in range(4):
                         key[Keys[j]]=list(c[index][0][j])[0] ^ Gold[j]
                 if verbose>1:
@@ -370,14 +467,7 @@ def crack(datafile, lastroundkeys=[], encrypt=True, outputbeforelastrounds=False
             if False in recovered:
                 continue
             if (len(lastroundkeys)>0 or outputbeforelastrounds) and encrypt:
-                k=[0]*16
-                for i in range(4):
-                    for j in range(4):
-                        k[(4*i)+j] = _AesMult[_MC[j][0]][key[(4*i)+0]]^\
-                                     _AesMult[_MC[j][1]][key[(4*i)+1]]^\
-                                     _AesMult[_MC[j][2]][key[(4*i)+2]]^\
-                                     _AesMult[_MC[j][3]][key[(4*i)+3]]
-                key=k
+                key=MC(key)
             if encrypt:
                 if len(lastroundkeys)==0:
                     if outputbeforelastrounds:
@@ -400,9 +490,8 @@ def crack(datafile, lastroundkeys=[], encrypt=True, outputbeforelastrounds=False
     return None
 
 def _absorb(index, o, candidates, goldenrefbytes, encrypt, verbose):
-    obytes=[(o>>(i<<3) & 0xff) for i in range(blocksize)][::-1]
-    Diff=[x^g for x, g, y in zip (obytes, goldenrefbytes, _AesFaultMaps[encrypt][index]) if y]
-    Keys=[  k for    k, y in zip (             range(16), _AesFaultMaps[encrypt][index]) if y]
+    Diff=[x^g for x, g, y in zip (o, goldenrefbytes, _AesFaultMaps[encrypt][index]) if y]
+    Keys=[  k for    k, y in zip (        range(16), _AesFaultMaps[encrypt][index]) if y]
     Cands  = _get_cands(Diff, Keys, [[14, 9,  13, 11], [2, 3, 1, 1]][encrypt], encrypt, verbose)
     Cands += _get_cands(Diff, Keys, [[11, 14, 9,  13], [3, 1, 1, 2]][encrypt], encrypt, verbose)
     Cands += _get_cands(Diff, Keys, [[13, 11, 14, 9] , [1, 1, 2, 3]][encrypt], encrypt, verbose)
@@ -429,26 +518,45 @@ def _get_cands(Diff, Keys, tmult, encrypt, verbose):
     return cands
 
 def _get_compat(diff, tmult, encrypt):
-    ibox = _AesSBox[1-encrypt]
+    ibox = [_AesSBox, _AesInvSBox][encrypt]
     itab = [0]*256
     for i,mi in enumerate(_AesMult[tmult]):
         itab[mi] = i
     return [itab[ibox[j^diff]^ibox_j] for j,ibox_j in enumerate(ibox)]
 
-def convert_r8faults(datafile8, datafile9, encrypt=True):
-    with open(datafile8) as r8file:
-        r8faults = [l.strip() for l in r8file.readlines()]
+def convert_r8faults_file(r8_filename, r9_filename, encrypt=True):
+    """
+    Convert a set of outputs glitched on round8 into a set of outputs glitched on round9
+
+    :param r8_filename: the filename of a file containing the output reference on the first line and glitched outputs on next lines, as hex strings
+    :param r9_filename: the filename of the file to be written with the same conventions
+    """
+    with open(r8_filename) as r8file:
+        r8faults = [bytearray.fromhex(l.strip()) for l in r8file.readlines()]
     ref = r8faults.pop(0)
-    with open(datafile9, 'w') as r9file:
-        r9file.write(ref+'\n')
-        for f8 in r8faults:
-            if encrypt:
-                r9file.write(ref[2* 0:2* 0]+f8[2* 0:2* 1]+ref[2* 1:2* 7]+f8[2* 7:2* 8]+ref[2* 8:2*10]+f8[2*10:2*11]+ref[2*11:2*13]+f8[2*13:2*14]+ref[2*14:2*16]+'\n')
-                r9file.write(ref[2* 0:2* 1]+f8[2* 1:2* 2]+ref[2* 2:2* 4]+f8[2* 4:2* 5]+ref[2* 5:2*11]+f8[2*11:2*12]+ref[2*12:2*14]+f8[2*14:2*15]+ref[2*15:2*16]+'\n')
-                r9file.write(ref[2* 0:2* 2]+f8[2* 2:2* 3]+ref[2* 3:2* 5]+f8[2* 5:2* 6]+ref[2* 6:2* 8]+f8[2* 8:2* 9]+ref[2* 9:2*15]+f8[2*15:2*16]+ref[2*16:2*16]+'\n')
-                r9file.write(ref[2* 0:2* 3]+f8[2* 3:2* 4]+ref[2* 4:2* 6]+f8[2* 6:2* 7]+ref[2* 7:2* 9]+f8[2* 9:2*10]+ref[2*10:2*12]+f8[2*12:2*13]+ref[2*13:2*16]+'\n')
-            else:
-                r9file.write(ref[2* 0:2* 0]+f8[2* 0:2* 1]+ref[2* 1:2* 5]+f8[2* 5:2* 6]+ref[2* 6:2*10]+f8[2*10:2*11]+ref[2*11:2*15]+f8[2*15:2*16]+ref[2*16:2*16]+'\n')
-                r9file.write(ref[2* 0:2* 1]+f8[2* 1:2* 2]+ref[2* 2:2* 6]+f8[2* 6:2* 7]+ref[2* 7:2*11]+f8[2*11:2*12]+ref[2*12:2*12]+f8[2*12:2*13]+ref[2*13:2*16]+'\n')
-                r9file.write(ref[2* 0:2* 2]+f8[2* 2:2* 3]+ref[2* 3:2* 7]+f8[2* 7:2* 8]+ref[2* 8:2* 8]+f8[2* 8:2* 9]+ref[2* 9:2*13]+f8[2*13:2*14]+ref[2*14:2*16]+'\n')
-                r9file.write(ref[2* 0:2* 3]+f8[2* 3:2* 4]+ref[2* 4:2* 4]+f8[2* 4:2* 5]+ref[2* 5:2* 9]+f8[2* 9:2*10]+ref[2*10:2*14]+f8[2*14:2*15]+ref[2*15:2*16]+'\n')
+    r9faults = convert_r8faults_bytes(r8faults, ref, encrypt=encrypt)
+    with open(r9_filename, 'w') as r9file:
+        r9file.write("{}\n".format(ref.hex()))
+        for f9 in r9faults:
+            r9file.write("{}\n".format(f9.hex()))
+
+def convert_r8faults_bytes(r8faults, ref, encrypt=True):
+    """
+    Convert a set of outputs glitched on round8 into a set of outputs glitched on round9
+    :param r8faults: a list of glitched outputs as bytearrays
+    :param ref: the reference output bytearray
+    :returns: a list of glitched outputs as bytearrays
+    """
+    r9faults=[]
+    for f8 in r8faults:
+        if encrypt:
+            r9faults.append(bytearray(ref[ 0: 0]+f8[ 0: 1]+ref[ 1: 7]+f8[ 7: 8]+ref[ 8:10]+f8[10:11]+ref[11:13]+f8[13:14]+ref[14:16]))
+            r9faults.append(bytearray(ref[ 0: 1]+f8[ 1: 2]+ref[ 2: 4]+f8[ 4: 5]+ref[ 5:11]+f8[11:12]+ref[12:14]+f8[14:15]+ref[15:16]))
+            r9faults.append(bytearray(ref[ 0: 2]+f8[ 2: 3]+ref[ 3: 5]+f8[ 5: 6]+ref[ 6: 8]+f8[ 8: 9]+ref[ 9:15]+f8[15:16]+ref[16:16]))
+            r9faults.append(bytearray(ref[ 0: 3]+f8[ 3: 4]+ref[ 4: 6]+f8[ 6: 7]+ref[ 7: 9]+f8[ 9:10]+ref[10:12]+f8[12:13]+ref[13:16]))
+        else:
+            r9faults.append(bytearray(ref[ 0: 0]+f8[ 0: 1]+ref[ 1: 5]+f8[ 5: 6]+ref[ 6:10]+f8[10:11]+ref[11:15]+f8[15:16]+ref[16:16]))
+            r9faults.append(bytearray(ref[ 0: 1]+f8[ 1: 2]+ref[ 2: 6]+f8[ 6: 7]+ref[ 7:11]+f8[11:12]+ref[12:12]+f8[12:13]+ref[13:16]))
+            r9faults.append(bytearray(ref[ 0: 2]+f8[ 2: 3]+ref[ 3: 7]+f8[ 7: 8]+ref[ 8: 8]+f8[ 8: 9]+ref[ 9:13]+f8[13:14]+ref[14:16]))
+            r9faults.append(bytearray(ref[ 0: 3]+f8[ 3: 4]+ref[ 4: 4]+f8[ 4: 5]+ref[ 5: 9]+f8[ 9:10]+ref[10:14]+f8[14:15]+ref[15:16]))
+    return r9faults
