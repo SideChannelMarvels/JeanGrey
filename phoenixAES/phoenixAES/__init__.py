@@ -487,7 +487,10 @@ def crack_bytes(r9faults, ref, lastroundkeys=[], encrypt=True, outputbeforelastr
             roundkey = ''.join(["%02X" % x for x in key])
             print(roundkey)
             return roundkey
-    return ''.join(["%02X" % x if x is not None else ".." for x in key])
+    if True in recovered:
+        return ''.join(["%02X" % x if x is not None else ".." for x in key])
+    else:
+        return None
 
 def _absorb(index, o, candidates, goldenrefbytes, encrypt, verbose):
     Diff=[x^g for x, g, y in zip (o, goldenrefbytes, _AesFaultMaps[encrypt][index]) if y]
@@ -560,4 +563,3 @@ def convert_r8faults_bytes(r8faults, ref, encrypt=True):
             r9faults.append(bytearray(ref[ 0: 2]+f8[ 2: 3]+ref[ 3: 7]+f8[ 7: 8]+ref[ 8: 8]+f8[ 8: 9]+ref[ 9:13]+f8[13:14]+ref[14:16]))
             r9faults.append(bytearray(ref[ 0: 3]+f8[ 3: 4]+ref[ 4: 4]+f8[ 4: 5]+ref[ 5: 9]+f8[ 9:10]+ref[10:14]+f8[14:15]+ref[15:16]))
     return r9faults
-
