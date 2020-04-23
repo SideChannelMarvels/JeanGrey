@@ -508,7 +508,11 @@ def _absorb(index, o, candidates, goldenrefbytes, encrypt, verbose):
             for loc0,loc1,loc2,loc3 in candidates[index]:
                 if (lc0 & loc0) and (lc1 & loc1) and (lc2 & loc2) and (lc3 & loc3):
                     new_candidates.append(((lc0 & loc0), (lc1 & loc1), (lc2 & loc2), (lc3 & loc3)))
-        candidates[index]=new_candidates
+        # candidates[index]=new_candidates
+        if new_candidates != []:
+            candidates[index]=new_candidates
+        else:
+            candidates[index] += Cands
 
 def _get_cands(Diff, Keys, tmult, encrypt, verbose):
     candi = [_get_compat(di, ti, encrypt) for di,ti in zip(Diff, tmult)]
