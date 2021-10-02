@@ -443,6 +443,8 @@ def crack_bytes(r9faults, ref, lastroundkeys=[], encrypt=True, outputbeforelastr
     candidates=[[], [], [], []]
     recovered=[False, False, False, False]
     key=[None]*16
+    if not outputbeforelastrounds:
+        ref=rewind(ref, lastroundkeys=lastroundkeys, encrypt=encrypt)
     _, index=check(ref, encrypt=encrypt, verbose=verbose, init=True)
     for o in r9faults:
         if not outputbeforelastrounds:

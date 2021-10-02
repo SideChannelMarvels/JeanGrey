@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="phoenixAES",
-    version="0.0.2",
+    version="0.0.4",
     author="Philippe Teuwen",
     author_email="phil@teuwen.org",
     description="tool to perform differential fault analysis attacks (DFA) against AES",
