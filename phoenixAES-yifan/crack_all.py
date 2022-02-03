@@ -16,8 +16,11 @@ def main(flavour, last_round_file, second_round_file=None, known=None):
                 r9faults = phoenixAES.convert_r8faults_bytes((candidates[i], candidates[j]), candidates[0], encrypt=encrypt)
                 res = phoenixAES.crack_bytes(r9faults, candidates[0], encrypt=encrypt, verbose=0)
                 if res is not None:
-                    last_round = bytearray.fromhex(res)
-                    break
+                    if '.' not in res:
+                        last_round = bytearray.fromhex(res)
+                        break
+                    else: # partial recovery
+                        print(res)
             if last_round is not None:
                 break
         if int(flavour[1:], 10) == 128 or last_round is None:
@@ -37,8 +40,11 @@ def main(flavour, last_round_file, second_round_file=None, known=None):
             r9faults = phoenixAES.convert_r8faults_bytes((candidates[i], candidates[j]), candidates[0], encrypt=encrypt)
             res = phoenixAES.crack_bytes(r9faults, candidates[0], encrypt=encrypt, verbose=0)
             if res is not None:
-                second_round = bytearray.fromhex(res)
-                break
+                if '.' not in res:
+                    second_round = bytearray.fromhex(res)
+                    break
+                else: # partial recovery
+                    print(res)
         if second_round is not None:
             break
     if second_round is None:
