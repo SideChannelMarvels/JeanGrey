@@ -16,6 +16,7 @@ def main(flavour, last_round_file, second_round_file=None, known=None):
                 r9faults = phoenixAES.convert_r8faults_bytes((candidates[i], candidates[j]), candidates[0], encrypt=encrypt)
                 res = phoenixAES.crack_bytes(r9faults, candidates[0], encrypt=encrypt, verbose=0)
                 if res is not None:
+                    print("Using faulty pairs %i and %i:" % (i, j))
                     if '.' not in res:
                         last_round = bytearray.fromhex(res)
                         break
@@ -40,6 +41,7 @@ def main(flavour, last_round_file, second_round_file=None, known=None):
             r9faults = phoenixAES.convert_r8faults_bytes((candidates[i], candidates[j]), candidates[0], encrypt=encrypt)
             res = phoenixAES.crack_bytes(r9faults, candidates[0], encrypt=encrypt, verbose=0)
             if res is not None:
+                print("Using faulty pairs %i and %i:" % (i, j))
                 if '.' not in res:
                     second_round = bytearray.fromhex(res)
                     break
