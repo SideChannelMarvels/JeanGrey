@@ -2,6 +2,8 @@
 
 When you know the key being used, you can compare side by side a correct and faulty execution and see where the fault was likely injected, i.e. at which moment both executions differ by only few bitflips.
 
+The tool displays how many bits are different between correct and faulty execution on the last operation then rewinds it until it finds a minimum in the number of bitflips.
+
 ## Examples
 
 ### Faulted AES encryption
@@ -44,4 +46,3 @@ We see the fault occurred likely *before* the MixCol operation of round 5, with 
 
 AES implementation based on https://github.com/boppreh/aes, itself expanded from Bo Zhu's (http://about.bozhu.me)
 AES-128 implementation at https://github.com/bozhu/AES-Python
-

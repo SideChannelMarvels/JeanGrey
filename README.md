@@ -8,6 +8,7 @@ Currently it contains the following tools:
 
   * [phoenixAES](phoenixAES) for AES DFA attacks
   * [phoenixAES-yifan](phoenixAES-yifan) for AES DFA attacks, a variant by Yifan Lu which will try all possible combinations of ciphertexts. Slower but handy when phoenixAES fails.
+  * [aes-known-key-fault-analysis](aes-known-key-fault-analysis) to compute from a pair of correct and faulty ciphertexts where a fault has been injected (any round), once the key is known.
 
 Similar tools:
 
