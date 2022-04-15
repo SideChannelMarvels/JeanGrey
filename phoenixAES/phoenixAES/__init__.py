@@ -497,10 +497,10 @@ def crack_bytes(r9faults, ref, lastroundkeys=[], encrypt=True, outputbeforelastr
 def _absorb(index, o, candidates, goldenrefbytes, encrypt, verbose):
     Diff=[x^g for x, g, y in zip (o, goldenrefbytes, _AesFaultMaps[encrypt][index]) if y]
     Keys=[  k for    k, y in zip (        range(16), _AesFaultMaps[encrypt][index]) if y]
-    Cands  = _get_cands(Diff, Keys, [[14, 9,  13, 11], [2, 3, 1, 1]][encrypt], encrypt, verbose)
-    Cands += _get_cands(Diff, Keys, [[11, 14, 9,  13], [3, 1, 1, 2]][encrypt], encrypt, verbose)
-    Cands += _get_cands(Diff, Keys, [[13, 11, 14, 9] , [1, 1, 2, 3]][encrypt], encrypt, verbose)
-    Cands += _get_cands(Diff, Keys, [[9,  13, 11, 14], [1, 2, 3, 1]][encrypt], encrypt, verbose)
+    Cands  = _get_cands(Diff, Keys, goldenrefbytes, [[14, 9,  13, 11], [2, 3, 1, 1]][encrypt], encrypt, verbose)
+    Cands += _get_cands(Diff, Keys, goldenrefbytes, [[11, 14, 9,  13], [3, 1, 1, 2]][encrypt], encrypt, verbose)
+    Cands += _get_cands(Diff, Keys, goldenrefbytes, [[13, 11, 14, 9] , [1, 1, 2, 3]][encrypt], encrypt, verbose)
+    Cands += _get_cands(Diff, Keys, goldenrefbytes, [[9,  13, 11, 14], [1, 2, 3, 1]][encrypt], encrypt, verbose)
     if not candidates[index]:
         candidates[index] = Cands
     else:
@@ -516,14 +516,15 @@ def _absorb(index, o, candidates, goldenrefbytes, encrypt, verbose):
         else:
             candidates[index] += Cands
 
-def _get_cands(Diff, Keys, tmult, encrypt, verbose):
+def _get_cands(Diff, Keys, Gold, tmult, encrypt, verbose):
     candi = [_get_compat(di, ti, encrypt) for di,ti in zip(Diff, tmult)]
     z = set(candi[0]).intersection(*candi[1:])
     candi = [[t for t in enumerate(ci) if t[1] in z] for ci in candi]
     cands = [[set([j for j,x in ci if x==zi]) for ci in candi] for zi in z]
     if verbose > 2:
         for kc0,kc1,kc2,kc3 in cands:
-            print ("K%x:" % Keys[0], ["%02X" % x for x in kc0], "K%x:" % Keys[1], ["%02X" % x for x in kc1],"K%x:" % Keys[2], ["%02X" % x for x in kc2],"K%x:" % Keys[3], ["%02X" % x for x in kc3])
+#            print ("K%x:" % Keys[0], ["%02X" % x for x in kc0], "K%x:" % Keys[1], ["%02X" % x for x in kc1],"K%x:" % Keys[2], ["%02X" % x for x in kc2],"K%x:" % Keys[3], ["%02X" % x for x in kc3])
+            print ("K%x:" % Keys[0], ["%02X" % (x ^ Gold[Keys[0]]) for x in kc0], "K%x:" % Keys[1], ["%02X" % (x ^ Gold[Keys[1]]) for x in kc1],"K%x:" % Keys[2], ["%02X" % (x ^ Gold[Keys[2]]) for x in kc2],"K%x:" % Keys[3], ["%02X" % (x ^ Gold[Keys[3]]) for x in kc3])
     return cands
 
 def _get_compat(diff, tmult, encrypt):
