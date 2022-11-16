@@ -5,11 +5,12 @@ Currently phoenixAES contains the following ciphers and fault models:
   * simple DFA R9:  
     AES 128 encryption or decryption  
     At least 4*2 faults in round 9 (between the last two MixCols)  
-    Ref: https://eprint.iacr.org/2003/010  
+    Ref: *[G. Piret and J.-J. Quisquater. A Differential Fault Attack Technique against SPN Structures, with Application to the AES and Khazad, CHES 2003 (pdf)](https://link.springer.com/content/pdf/10.1007/978-3-540-45238-6_7.pdf)*  
     Current implementation discards automatically unexploitable outputs but may fail if more than one fault occur on the same column so be careful to record only outputs from single faulted implementations.
   * simple DFA R8:  
     AES 128 encryption or decryption  
-    2 single faults in round 8
+    2 single faults in round 8  
+    Ref: same paper as above  
     It simply converts the ciphertexts as if they were faulted in round 9 so the previous attack can be applied
 
 See https://blog.quarkslab.com/differential-fault-analysis-on-white-box-aes-implementations.html for more background.
