@@ -8,7 +8,7 @@ The tool displays how many bits are different between correct and faulty executi
 
 ### Faulted AES encryption
 
-Rewinding (=decrypting) the faulty output `50473981ae8fcc3c6320af9135023786` and the correct output `50473981ae8fcc3c6320af9135023786` of an AES encryption, knowing the key was `000102030405060708090a0b0c0d0e0f`:
+Rewinding (=decrypting) the faulty output `50473981ae8fcc3c6320af9135023786` and the correct output `c6a13b37878f5b826f4f8162a1c8d879` of an AES encryption, knowing the key was `000102030405060708090a0b0c0d0e0f`:
 ```
 ./aes-known-key-fault-analysis.py encryption 000102030405060708090a0b0c0d0e0f 50473981ae8fcc3c6320af9135023786 c6a13b37878f5b826f4f8162a1c8d879
 Cipher  :  4  5  1  5  3 ..  5  6  2  6  4  6  3  4  7  8
