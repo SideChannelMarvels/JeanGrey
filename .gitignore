@@ -1,2 +1,6 @@
 *.pyc
 IN_Table.pkl
+build/
+dist/
+*.egg-info/
+tests/

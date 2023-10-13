@@ -13,7 +13,9 @@ Currently phoenixAES contains the following ciphers and fault models:
     Ref: same paper as above  
     It simply converts the ciphertexts as if they were faulted in round 9 so the previous attack can be applied
 
-See https://blog.quarkslab.com/differential-fault-analysis-on-white-box-aes-implementations.html for more background.
+See https://blog.quarkslab.com/differential-fault-analysis-on-white-box-aes-implementations.html for more background. (if the equations rendering is broken, check the [archive.org](https://web.archive.org/web/20201111205745/https://blog.quarkslab.com/differential-fault-analysis-on-white-box-aes-implementations.html) version)
+
+See [Deadpool DFA](https://github.com/SideChannelMarvels/Deadpool/blob/master/README_dfa.md) for several usage examples against whitebox implementations.
 
 ## Installation
 
